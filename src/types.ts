@@ -1,4 +1,6 @@
 export type Role = "citizen" | "responder" | "dispatcher";
+export type AuthMode = "login" | "register";
+export type AdminView = "overview" | "logs";
 export type EmergencyType = "medical" | "fire" | "security";
 export type IncidentStatus =
   | "idle"
@@ -32,9 +34,24 @@ export type Responder = {
 export type IncidentState = {
   type: EmergencyType;
   status: IncidentStatus;
+  declined: boolean;
 };
 
 export type IncidentAction =
   | { type: "select"; emergency: EmergencyType }
   | { type: "transition"; status: IncidentStatus }
+  | { type: "decline" }
   | { type: "reset" };
+
+export type IncidentRecord = {
+  id: string;
+  citizen: string;
+  coordinates: string;
+  location: string;
+  emergency: EmergencyType;
+  unit: string;
+  reportedAt: string;
+  resolvedAt: string;
+  duration: string;
+  status: "active" | "resolved" | "cancelled";
+};

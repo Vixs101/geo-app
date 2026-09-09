@@ -7,6 +7,7 @@ import type {
 export const initialIncident: IncidentState = {
   type: "medical",
   status: "idle",
+  declined: false,
 };
 
 const allowedTransitions: Record<IncidentStatus, IncidentStatus[]> = {
@@ -24,6 +25,9 @@ export function incidentReducer(
   action: IncidentAction,
 ): IncidentState {
   if (action.type === "reset") return initialIncident;
+  if (action.type === "decline" && state.status === "searching") {
+    return { ...state, declined: true };
+  }
   if (action.type === "select" && state.status === "idle") {
     return { ...state, type: action.emergency };
   }
@@ -31,7 +35,7 @@ export function incidentReducer(
     action.type === "transition" &&
     allowedTransitions[state.status].includes(action.status)
   ) {
-    return { ...state, status: action.status };
+    return { ...state, status: action.status, declined: false };
   }
   return state;
 }

@@ -19,14 +19,20 @@ test("incident follows the complete workflow and rejects skipped states", () => 
   const flow: IncidentStatus[] = [
     "locating",
     "searching",
-    "assigned",
-    "en_route",
-    "arrived",
-    "resolved",
   ];
   for (const status of flow) {
     state = incidentReducer(state, { type: "transition", status });
     assert.equal(state.status, status);
+  }
+
+  state = incidentReducer(state, { type: "decline" });
+  assert.equal(state.status, "searching");
+  assert.equal(state.declined, true);
+
+  for (const status of ["assigned", "en_route", "arrived", "resolved"] as IncidentStatus[]) {
+    state = incidentReducer(state, { type: "transition", status });
+    assert.equal(state.status, status);
+    assert.equal(state.declined, false);
   }
 
   assert.deepEqual(incidentReducer(state, { type: "reset" }), initialIncident);

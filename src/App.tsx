@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
+  AlertCircle,
   Ambulance,
   BellRing,
   Check,
   CheckCircle2,
   ChevronRight,
-  CircleUserRound,
   Clock3,
   Crosshair,
   Flame,
   HeartPulse,
   History,
+  KeyRound,
+  ListFilter,
+  LogIn,
+  LogOut,
   LocateFixed,
   MapPin,
   Navigation,
@@ -22,6 +26,7 @@ import {
   Shield,
   ShieldCheck,
   Siren,
+  UserPlus,
   UserRound,
   Wifi,
 } from "lucide-react";
@@ -31,14 +36,19 @@ import {
   emergencyCopy,
   facilities,
   INCIDENT_POSITION,
+  incidentRecords,
   JALINGO_CENTER,
   responders,
   statusCopy,
 } from "./data.ts";
 import { hasReached, incidentReducer, initialIncident } from "./state.ts";
+import { filterIncidents, validateAuth, type AuthValues } from "./validation.ts";
 import type {
+  AdminView,
+  AuthMode,
   Coordinates,
   EmergencyType,
+  IncidentRecord,
   IncidentStatus,
   Responder,
   Role,
@@ -131,10 +141,7 @@ function EmergencyMap({
             <Marker
               key={unit.id}
               position={position}
-              icon={markerIcon(
-                "responder",
-                unit.status === "offline" ? "#8090a3" : isPrimary ? "#0b8f79" : "#2563eb",
-              )}
+              icon={markerIcon("responder", unit.status === "offline" ? "#8090a3" : isPrimary || unit.status === "busy" ? "#db3d4b" : "#16a36f")}
             >
               <Popup>
                 <strong>{unit.unit}</strong>
@@ -162,7 +169,8 @@ function EmergencyMap({
       </MapContainer>
       <div className="map-legend" aria-hidden="true">
         <span><i className="legend-dot legend-dot--incident" /> Incident</span>
-        <span><i className="legend-dot legend-dot--unit" /> Responder</span>
+        <span><i className="legend-dot legend-dot--available" /> Available</span>
+        <span><i className="legend-dot legend-dot--engaged" /> Engaged</span>
         <span><i className="legend-dot legend-dot--facility" /> Facility</span>
       </div>
       <div className="map-live"><Wifi size={13} /> Live</div>
@@ -179,7 +187,7 @@ function Logo() {
   );
 }
 
-function AppHeader({ role, setRole }: { role: Role; setRole: (role: Role) => void }) {
+function AppHeader({ role, setRole, logout }: { role: Role; setRole: (role: Role) => void; logout: () => void }) {
   return (
     <>
       <div className="system-banner">
@@ -189,7 +197,7 @@ function AppHeader({ role, setRole }: { role: Role; setRole: (role: Role) => voi
       </div>
       <header className="app-header">
         <Logo />
-        <nav className="role-switcher" aria-label="Preview application as">
+        <nav className="role-switcher" aria-label="Application role">
           {roles.map((item) => {
             const Icon = item.icon;
             return (
@@ -208,10 +216,96 @@ function AppHeader({ role, setRole }: { role: Role; setRole: (role: Role) => voi
         </nav>
         <div className="header-meta">
           <span className="network"><i /> Network operational</span>
-          <button className="avatar" type="button" aria-label="Open account"><CircleUserRound size={21} /></button>
+          <button className="avatar" type="button" aria-label="Sign out" title="Sign out" onClick={logout}><LogOut size={19} /></button>
         </div>
       </header>
     </>
+  );
+}
+
+function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [showPassword, setShowPassword] = useState(false);
+  const [values, setValues] = useState<AuthValues>({ fullName: "", phone: "", password: "", confirmPassword: "" });
+  const [errors, setErrors] = useState<Partial<Record<keyof AuthValues, string>>>({});
+
+  function changeMode(nextMode: AuthMode) {
+    setMode(nextMode);
+    setErrors({});
+  }
+
+  function update(field: keyof AuthValues, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+    if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validateAuth(mode, values);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length === 0) onAuthenticated();
+  }
+
+  const field = (name: keyof AuthValues, label: string, type = "text", placeholder = "") => (
+    <label className={`auth-field ${errors[name] ? "auth-field--error" : ""}`}>
+      <span>{label}</span>
+      <div>
+        <input
+          type={name.includes("Password") || name === "password" ? (showPassword ? "text" : "password") : type}
+          value={values[name]}
+          onChange={(event) => update(name, event.target.value)}
+          placeholder={placeholder}
+          autoComplete={name === "phone" ? "tel" : name === "fullName" ? "name" : mode === "login" ? "current-password" : "new-password"}
+          aria-invalid={Boolean(errors[name])}
+          aria-describedby={errors[name] ? `${name}-error` : undefined}
+        />
+        {name === "password" && <button type="button" onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? "Hide" : "Show"}</button>}
+      </div>
+      {errors[name] && <small id={`${name}-error`}><AlertCircle size={13} /> {errors[name]}</small>}
+    </label>
+  );
+
+  return (
+    <main className="auth-page">
+      <section className="auth-story">
+        <Logo />
+        <div>
+          <span className="eyebrow"><ShieldCheck size={15} /> Taraba emergency network</span>
+          <h1>Help reaches the right place, faster.</h1>
+          <p>One secure network for citizens, emergency responders and dispatch operations across Taraba State.</p>
+        </div>
+        <div className="auth-benefits">
+          <span><LocateFixed size={19} /><strong>Precise location</strong><small>Share verified GPS coordinates instantly.</small></span>
+          <span><Radio size={19} /><strong>Rapid dispatch</strong><small>Reach the closest available response unit.</small></span>
+          <span><ShieldCheck size={19} /><strong>Trusted network</strong><small>Protected access for every account.</small></span>
+        </div>
+        <p className="auth-support"><Phone size={15} /> Emergency voice line <strong>112</strong></p>
+      </section>
+
+      <section className="auth-panel">
+        <div className="auth-card">
+          <div className="auth-mobile-brand"><Logo /></div>
+          <div className="auth-tabs" role="tablist" aria-label="Account access">
+            <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => changeMode("login")}><LogIn size={16} /> Login</button>
+            <button type="button" role="tab" aria-selected={mode === "register"} className={mode === "register" ? "active" : ""} onClick={() => changeMode("register")}><UserPlus size={16} /> Register</button>
+          </div>
+          <div className="auth-heading">
+            <span className="auth-heading__icon">{mode === "login" ? <KeyRound size={22} /> : <UserPlus size={22} />}</span>
+            <div><h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2><p>{mode === "login" ? "Enter your details to access RapidAid." : "Register to request and track emergency assistance."}</p></div>
+          </div>
+          <form onSubmit={submit} noValidate>
+            {mode === "register" && field("fullName", "Full name", "text", "e.g. Fatima Bello")}
+            {field("phone", "Phone number", "tel", "e.g. 0803 123 4567")}
+            {field("password", "Password", "password", "Minimum 6 characters")}
+            {mode === "register" && field("confirmPassword", "Confirm password", "password", "Repeat your password")}
+            {mode === "login" && <div className="auth-options"><label><input type="checkbox" /> Remember me</label><button type="button">Forgot password?</button></div>}
+            <button type="submit" className="primary-action auth-submit">{mode === "login" ? <LogIn size={18} /> : <UserPlus size={18} />}{mode === "login" ? "Login securely" : "Create account"}<ChevronRight size={18} /></button>
+          </form>
+          <p className="auth-switch">{mode === "login" ? "New to RapidAid?" : "Already registered?"} <button type="button" onClick={() => changeMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Create an account" : "Login instead"}</button></p>
+        </div>
+        <p className="auth-legal">By continuing, you agree to the emergency network’s terms of use and privacy policy.</p>
+      </section>
+    </main>
   );
 }
 
@@ -344,15 +438,19 @@ function CitizenView({
 function ResponderView({
   emergency,
   status,
+  declined,
   transition,
+  decline,
 }: {
   emergency: EmergencyType;
   status: IncidentStatus;
+  declined: boolean;
   transition: (status: IncidentStatus) => void;
+  decline: () => void;
 }) {
   const [available, setAvailable] = useState(true);
   const primary = responders.find((unit) => unit.type === emergency) ?? responders[0];
-  const incoming = status === "searching";
+  const incoming = status === "searching" && !declined;
   const assigned = hasReached(status, "assigned") && status !== "resolved";
   const nextAction =
     status === "assigned"
@@ -383,8 +481,16 @@ function ResponderView({
           </div>
           <div className="incoming-alert__eta"><small>Estimated arrival</small><strong>{primary.eta}</strong><span>Light traffic</span></div>
           <div className="incoming-alert__actions">
+            <button type="button" className="secondary-action" onClick={decline}>Decline</button>
             <button type="button" className="primary-action" onClick={() => transition("assigned")}><Check size={18} /> Accept request</button>
           </div>
+        </section>
+      )}
+
+      {status === "searching" && declined && (
+        <section className="declined-alert" role="status">
+          <CheckCircle2 size={20} />
+          <span><strong>Request returned to dispatch</strong><small>The command centre will assign another available unit.</small></span>
         </section>
       )}
 
@@ -414,7 +520,7 @@ function ResponderView({
                 <button type="button" className="contact-button"><Phone size={17} /> Contact caller</button>
               </>
             ) : (
-              <div className="empty-state"><span><Route size={27} /></span><strong>No active assignment</strong><p>{incoming ? "Review the new request to begin." : "Stay available for nearby requests."}</p></div>
+              <div className="empty-state"><span><Route size={27} /></span><strong>No active assignment</strong><p>{incoming ? "Review the new request to begin." : declined ? "The request was returned to dispatch." : "Stay available for nearby requests."}</p></div>
             )}
           </section>
           <section className="panel shift-card">
@@ -431,11 +537,76 @@ function Metric({ icon, label, value, detail, tone }: { icon: ReactNode; label: 
   return <article className="metric-card"><span className={`metric-icon metric-icon--${tone}`}>{icon}</span><div><p>{label}</p><strong>{value}</strong><small>{detail}</small></div></article>;
 }
 
-function DispatcherView({ emergency, status, transition }: { emergency: EmergencyType; status: IncidentStatus; transition: (status: IncidentStatus) => void }) {
+function RecordStatus({ status }: { status: IncidentRecord["status"] }) {
+  return <span className={`record-status record-status--${status}`}><i />{status}</span>;
+}
+
+function RecentIncidents({ records }: { records: IncidentRecord[] }) {
+  return (
+    <div className="incident-table incident-table--recent">
+      <table>
+        <thead><tr><th>Incident ID</th><th>Citizen</th><th>Time</th><th>Assigned unit</th><th>Status</th></tr></thead>
+        <tbody>{records.slice(0, 5).map((record) => (
+          <tr key={record.id}>
+            <td data-label="Incident ID"><strong>{record.id}</strong><small>{emergencyCopy[record.emergency].short}</small></td>
+            <td data-label="Citizen">{record.citizen}</td>
+            <td data-label="Time">{record.reportedAt}</td>
+            <td data-label="Assigned unit">{record.unit}</td>
+            <td data-label="Status"><RecordStatus status={record.status} /></td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function IncidentLogs({ records }: { records: IncidentRecord[] }) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | IncidentRecord["status"]>("all");
+  const filtered = filterIncidents(records, query, statusFilter);
+
+  return (
+    <section className="logs-panel panel">
+      <div className="logs-toolbar">
+        <div><h2>Incident records</h2><p>{filtered.length} of {records.length} records</p></div>
+        <div className="log-controls">
+          <label className="search-control"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search ID, citizen, location or unit" aria-label="Search incident records" /></label>
+          <label className="filter-control"><ListFilter size={16} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} aria-label="Filter incidents by status"><option value="all">All statuses</option><option value="active">Active</option><option value="resolved">Resolved</option><option value="cancelled">Cancelled</option></select></label>
+        </div>
+      </div>
+      {filtered.length ? (
+        <div className="incident-table incident-table--full">
+          <table>
+            <thead><tr><th>Incident ID</th><th>Citizen</th><th>Coordinates</th><th>Unit dispatched</th><th>Time reported</th><th>Time resolved</th><th>Response duration</th><th>Status</th></tr></thead>
+            <tbody>{filtered.map((record) => (
+              <tr key={record.id}>
+                <td data-label="Incident ID"><strong>{record.id}</strong><small>{emergencyCopy[record.emergency].short}</small></td>
+                <td data-label="Citizen"><strong>{record.citizen}</strong><small>{record.location}</small></td>
+                <td data-label="Coordinates">{record.coordinates}</td>
+                <td data-label="Unit dispatched">{record.unit}</td>
+                <td data-label="Time reported">{record.reportedAt}</td>
+                <td data-label="Time resolved">{record.resolvedAt}</td>
+                <td data-label="Response duration">{record.duration}</td>
+                <td data-label="Status"><RecordStatus status={record.status} /></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ) : <div className="log-empty"><Search size={24} /><strong>No incidents found</strong><p>Try another search term or status.</p></div>}
+    </section>
+  );
+}
+
+function DispatcherView({ emergency, status, declined, transition }: { emergency: EmergencyType; status: IncidentStatus; declined: boolean; transition: (status: IncidentStatus) => void }) {
   const primary = responders.find((unit) => unit.type === emergency) ?? responders[0];
   const active = status !== "idle" && status !== "resolved";
   const [filter, setFilter] = useState<"all" | EmergencyType>("all");
-  const visibleResponders = filter === "all" ? responders : responders.filter((unit) => unit.type === filter);
+  const [adminView, setAdminView] = useState<AdminView>("overview");
+  const currentRecord: IncidentRecord | null = status === "idle" ? null : {
+    id: "INC-2026-1042", citizen: "Fatima Bello", coordinates: "8.9008, 11.3658", location: "Palace Way, Jalingo", emergency,
+    unit: hasReached(status, "assigned") ? primary.id : "Unassigned", reportedAt: "31 Aug, 14:34", resolvedAt: status === "resolved" ? "31 Aug, 14:53" : "—", duration: status === "resolved" ? "19 min" : "In progress", status: status === "resolved" ? "resolved" : "active",
+  };
+  const records = currentRecord ? [currentRecord, ...incidentRecords] : incidentRecords;
   const events = [
     { time: "14:32", text: "Medical unit MED-04 returned to available", tone: "green" },
     { time: "14:27", text: "Incident INC-2026-1038 resolved", tone: "blue" },
@@ -446,82 +617,48 @@ function DispatcherView({ emergency, status, transition }: { emergency: Emergenc
   return (
     <main className="operations-page dispatcher-page">
       <div className="page-title-row">
-        <div><span className="eyebrow"><Activity size={15} /> Live operations</span><h1>Emergency command centre</h1><p>Jalingo response zone · Monday, 31 August</p></div>
-        <div className="dispatch-actions"><button type="button" className="icon-button" aria-label="Search"><Search size={19} /></button><button type="button" className="icon-button notification" aria-label="Notifications"><BellRing size={19} /><i /></button><button type="button" className="primary-action"><Siren size={18} /> Create incident</button></div>
+        <div><span className="eyebrow"><Activity size={15} /> {adminView === "overview" ? "Live operations" : "Operations archive"}</span><h1>{adminView === "overview" ? "Emergency command centre" : "Incident logs"}</h1><p>Jalingo response zone · Monday, 31 August</p></div>
+        {adminView === "overview" && <div className="dispatch-actions"><button type="button" className="icon-button" aria-label="Search"><Search size={19} /></button><button type="button" className="icon-button notification" aria-label="Notifications"><BellRing size={19} /><i /></button><button type="button" className="primary-action"><Siren size={18} /> Create incident</button></div>}
       </div>
 
-      <section className="metrics-grid">
-        <Metric icon={<Siren size={21} />} label="Active incidents" value={active ? "4" : "3"} detail={active ? "+1 in the last hour" : "Across Jalingo"} tone="red" />
-        <Metric icon={<Ambulance size={21} />} label="Units available" value="12" detail="of 18 total units" tone="teal" />
-        <Metric icon={<Clock3 size={21} />} label="Average response" value="6m 24s" detail="8% faster this week" tone="blue" />
-        <Metric icon={<CheckCircle2 size={21} />} label="Resolved today" value={status === "resolved" ? "29" : "28"} detail="94% within target" tone="violet" />
-      </section>
+      <nav className="admin-nav" aria-label="Command centre sections">
+        <button type="button" className={adminView === "overview" ? "active" : ""} onClick={() => setAdminView("overview")}><Activity size={16} /> Overview</button>
+        <button type="button" className={adminView === "logs" ? "active" : ""} onClick={() => setAdminView("logs")}><History size={16} /> Incident logs</button>
+      </nav>
 
-      <section className="command-grid">
-        <div className="command-map panel">
-          <div className="panel-toolbar">
-            <div><h2>Live response map</h2><p>{responders.filter((unit) => unit.status !== "offline").length} units reporting location</p></div>
-            <div className="map-filters">
-              {(["all", "medical", "fire", "security"] as const).map((item) => (
-                <button type="button" key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item === "all" ? "All assets" : emergencyCopy[item].short}</button>
-              ))}
-            </div>
-          </div>
-          <EmergencyMap status={status} emergency={emergency} dependency={`dispatcher-${filter}`} assetFilter={filter} />
-        </div>
+      {adminView === "logs" ? <IncidentLogs records={records} /> : <>
+        <section className="metrics-grid">
+          <Metric icon={<Siren size={21} />} label="Active incidents" value={active ? "4" : "3"} detail={active ? "+1 in the last hour" : "Across Jalingo"} tone="red" />
+          <Metric icon={<Ambulance size={21} />} label="Units available" value="12" detail="of 18 total units" tone="teal" />
+          <Metric icon={<Clock3 size={21} />} label="Average response" value="6m 24s" detail="8% faster this week" tone="blue" />
+          <Metric icon={<CheckCircle2 size={21} />} label="Resolved today" value={status === "resolved" ? "29" : "28"} detail="94% within target" tone="violet" />
+        </section>
 
-        <aside className="incident-queue panel">
-          <div className="panel-title"><div><h2>Incident queue</h2><p>{active ? "4" : "3"} currently active</p></div><button type="button">View all</button></div>
-          {status !== "idle" && (
-            <article className="queue-item queue-item--featured">
-              <div className="queue-top"><span className={`queue-icon queue-icon--${emergency}`}><EmergencyIcon type={emergency} size={18} /></span><span><strong>INC-2026-1042</strong><small>Just now</small></span><StatusPill status={status} /></div>
-              <h3>{emergencyCopy[emergency].label}</h3>
-              <p><MapPin size={14} /> Palace Way, Jalingo</p>
-              {status === "searching" ? (
-                <button className="queue-assign" type="button" onClick={() => transition("assigned")}><Ambulance size={16} /> Assign {primary.id}</button>
-              ) : hasReached(status, "assigned") ? (
-                <div className="assigned-unit"><span><Ambulance size={15} /></span><p><strong>{primary.id}</strong><small>{primary.name} · {primary.eta}</small></p></div>
-              ) : null}
-            </article>
-          )}
-          <article className="queue-item">
-            <div className="queue-top"><span className="queue-icon queue-icon--security"><Shield size={18} /></span><span><strong>INC-2026-1041</strong><small>4 min ago</small></span><StatusPill status="en_route" /></div>
-            <h3>Security assistance</h3><p><MapPin size={14} /> Hammaruwa Way</p>
-            <div className="assigned-unit"><span><Shield size={15} /></span><p><strong>POL-11</strong><small>Musa Garba · 6 min</small></p></div>
-          </article>
-          <article className="queue-item">
-            <div className="queue-top"><span className="queue-icon queue-icon--fire"><Flame size={18} /></span><span><strong>INC-2026-1040</strong><small>11 min ago</small></span><StatusPill status="arrived" /></div>
-            <h3>Smoke reported</h3><p><MapPin size={14} /> Roadblock, Jalingo</p>
-          </article>
-        </aside>
-      </section>
+        <section className="command-grid">
+          <div className="command-map panel">
+            <div className="panel-toolbar"><div><h2>Live response map</h2><p>{responders.filter((unit) => unit.status !== "offline").length} units reporting location</p></div><div className="map-filters">{(["all", "medical", "fire", "security"] as const).map((item) => <button type="button" key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item === "all" ? "All assets" : emergencyCopy[item].short}</button>)}</div></div>
+            <EmergencyMap status={status} emergency={emergency} dependency={`dispatcher-${filter}`} assetFilter={filter} />
+          </div>
 
-      <section className="dispatch-bottom">
-        <div className="panel units-panel">
-          <div className="panel-title"><div><h2>Response units</h2><p>Live availability and assignments</p></div><button type="button">Manage units</button></div>
-          <div className="units-table" role="table" aria-label="Response units">
-            <div className="units-row units-row--head" role="row"><span>Unit</span><span>Responder</span><span>Type</span><span>Status</span><span>Distance</span></div>
-            {visibleResponders.map((unit) => (
-              <div className="units-row" role="row" key={unit.id}>
-                <span><strong>{unit.id}</strong><small>{unit.unit}</small></span>
-                <span>{unit.name}</span><span>{emergencyCopy[unit.type].short}</span>
-                <span><i className={`unit-status unit-status--${unit.status}`} /> {unit.status}</span><span>{unit.distance}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="panel activity-panel">
-          <div className="panel-title"><div><h2>Activity feed</h2><p>Latest network updates</p></div><History size={19} /></div>
-          <div className="activity-list">
-            {events.map((event) => <div key={event.time}><i className={`event-dot event-dot--${event.tone}`} /><span><strong>{event.text}</strong><small>{event.time}</small></span></div>)}
-          </div>
-        </div>
-      </section>
+          <aside className="incident-queue panel">
+            <div className="panel-title"><div><h2>Incident queue</h2><p>{active ? "4" : "3"} currently active</p></div><button type="button" onClick={() => setAdminView("logs")}>View all</button></div>
+            {status !== "idle" && <article className="queue-item queue-item--featured"><div className="queue-top"><span className={`queue-icon queue-icon--${emergency}`}><EmergencyIcon type={emergency} size={18} /></span><span><strong>INC-2026-1042</strong><small>{declined ? "Returned to queue" : "Just now"}</small></span><StatusPill status={status} /></div><h3>{emergencyCopy[emergency].label}</h3><p><MapPin size={14} /> Palace Way, Jalingo</p>{status === "searching" ? <button className="queue-assign" type="button" onClick={() => transition("assigned")}><Ambulance size={16} /> {declined ? "Reassign" : "Assign"} {primary.id}</button> : hasReached(status, "assigned") ? <div className="assigned-unit"><span><Ambulance size={15} /></span><p><strong>{primary.id}</strong><small>{primary.name} · {primary.eta}</small></p></div> : null}</article>}
+            <article className="queue-item"><div className="queue-top"><span className="queue-icon queue-icon--security"><Shield size={18} /></span><span><strong>INC-2026-1041</strong><small>4 min ago</small></span><StatusPill status="en_route" /></div><h3>Security assistance</h3><p><MapPin size={14} /> Hammaruwa Way</p><div className="assigned-unit"><span><Shield size={15} /></span><p><strong>POL-11</strong><small>Musa Garba · 6 min</small></p></div></article>
+            <article className="queue-item"><div className="queue-top"><span className="queue-icon queue-icon--fire"><Flame size={18} /></span><span><strong>INC-2026-1040</strong><small>11 min ago</small></span><StatusPill status="arrived" /></div><h3>Smoke reported</h3><p><MapPin size={14} /> Roadblock, Jalingo</p></article>
+          </aside>
+        </section>
+
+        <section className="dispatch-bottom">
+          <div className="panel recent-panel"><div className="panel-title"><div><h2>Recent incidents</h2><p>Latest requests across the response network</p></div><button type="button" onClick={() => setAdminView("logs")}>Open incident logs</button></div><RecentIncidents records={records} /></div>
+          <div className="panel activity-panel"><div className="panel-title"><div><h2>Activity feed</h2><p>Latest network updates</p></div><History size={19} /></div><div className="activity-list">{events.map((event) => <div key={event.time}><i className={`event-dot event-dot--${event.tone}`} /><span><strong>{event.text}</strong><small>{event.time}</small></span></div>)}</div></div>
+        </section>
+      </>}
     </main>
   );
 }
 
 export function App() {
+  const [authenticated, setAuthenticated] = useState(false);
   const [role, setRole] = useState<Role>("citizen");
   const [incident, dispatch] = useReducer(incidentReducer, initialIncident);
   const announcement = useMemo(() => statusCopy[incident.status].title, [incident.status]);
@@ -536,9 +673,16 @@ export function App() {
     setRole("citizen");
   }
 
+  function logout() {
+    reset();
+    setAuthenticated(false);
+  }
+
+  if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
+
   return (
     <div className="app">
-      <AppHeader role={role} setRole={setRole} />
+      <AppHeader role={role} setRole={setRole} logout={logout} />
       <div className="sr-only" aria-live="polite">{announcement}</div>
       {role === "citizen" && (
         <CitizenView
@@ -550,10 +694,10 @@ export function App() {
         />
       )}
       {role === "responder" && (
-        <ResponderView emergency={incident.type} status={incident.status} transition={(status) => dispatch({ type: "transition", status })} />
+        <ResponderView emergency={incident.type} status={incident.status} declined={incident.declined} transition={(status) => dispatch({ type: "transition", status })} decline={() => dispatch({ type: "decline" })} />
       )}
       {role === "dispatcher" && (
-        <DispatcherView emergency={incident.type} status={incident.status} transition={(status) => dispatch({ type: "transition", status })} />
+        <DispatcherView emergency={incident.type} status={incident.status} declined={incident.declined} transition={(status) => dispatch({ type: "transition", status })} />
       )}
       <footer className="app-footer"><Logo /><p>Connecting citizens, responders and emergency operations across Taraba State.</p><span>© 2026 RapidAid</span></footer>
     </div>

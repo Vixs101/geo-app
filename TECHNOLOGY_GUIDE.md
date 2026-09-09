@@ -8,6 +8,8 @@ RapidAid is a Real-Time Emergency Response and Asset Mapping System for Taraba S
 - Responders receive requests, accept assignments, navigate to incidents, record arrival, and close completed incidents.
 - Dispatchers monitor active incidents, facilities, response units, availability, and operational performance.
 
+Account access begins with validated Login and Registration forms. Administrators can move between live operations and a searchable historical incident archive.
+
 The current application keeps these experiences synchronized through a shared incident workflow and a common geographic view of the Jalingo response zone.
 
 ## 2. Technology stack
@@ -41,7 +43,7 @@ React renders the user interface and keeps each role synchronized with the same 
 The principal React features are:
 
 - `useReducer` for the emergency workflow.
-- `useState` for the active role, responder duty state, and command-centre filters.
+- `useState` for authentication, the active role, responder duty state, administrative navigation, and table filters.
 - `useMemo` for derived accessibility announcements.
 - `useEffect` to resize Leaflet correctly when responsive layouts change.
 
@@ -49,7 +51,7 @@ React Router is not required because the role selector operates within one authe
 
 ### TypeScript
 
-TypeScript provides compile-time checks for React components and emergency-domain data. The application defines explicit types for roles, emergency categories, incident states, facilities, responders, and geographic coordinates.
+TypeScript provides compile-time checks for React components and emergency-domain data. The application defines explicit types for roles, authentication modes, emergency categories, incident states, historical records, facilities, responders, and geographic coordinates.
 
 An incident follows this controlled sequence:
 
@@ -103,7 +105,7 @@ The core palette assigns clear meaning to color:
 
 Responsive behavior is defined around 1120 px, 850 px, and 620 px:
 
-- Desktop displays wide maps, side panels, operational metrics, and response-unit tables.
+- Desktop displays wide maps, side panels, operational metrics, and incident tables.
 - Tablet layouts stack map and detail regions while preserving readable information density.
 - Mobile places the role tabs inside the application header, puts emergency actions before supporting maps, converts dense tables into compact rows, and enlarges touch targets.
 
@@ -118,7 +120,10 @@ The test verifies that:
 - An emergency type can be selected while the incident is idle.
 - Invalid skipped transitions are rejected.
 - Every valid transition reaches the correct state.
+- A declined request remains unassigned and returns to the dispatch queue.
 - Reset returns the workflow to its initial state.
+- Login and Registration fields return the appropriate validation errors.
+- Incident records can be searched and filtered by status.
 
 ### ESLint
 
@@ -131,14 +136,15 @@ It detects unused values, incorrect hook behavior, and code patterns that could 
 The frontend follows a compact unidirectional data flow:
 
 ```text
-System data ──────┐
-                  ├── Shared incident reducer ── Citizen view
-User actions ─────┤                          ├── Responder view
-                  │                          └── Command-centre view
-                  └── Leaflet map receives the same state
+Login / Registration ── Authenticated application shell
+                                │
+System data ──────┐              ├── Citizen view
+                  ├── Shared incident reducer ── Responder view
+User actions ─────┤              └── Command-centre view
+                  └── Leaflet map and incident tables receive the same state
 ```
 
-There is one source of truth for the active emergency. When a citizen submits a request, the reducer moves from `idle` to `locating`, then to `searching`. When a responder or dispatcher accepts the request, the state moves to `assigned`. Responder actions then move it through `en_route`, `arrived`, and `resolved`.
+There is one source of truth for the active emergency. When a citizen submits a request, the reducer moves from `idle` to `locating`, then to `searching`. When a responder or dispatcher accepts the request, the state moves to `assigned`. A declined request remains in `searching` for reassignment. Responder actions move an accepted request through `en_route`, `arrived`, and `resolved`.
 
 Every role reads the same state, which ensures that:
 
@@ -147,11 +153,15 @@ Every role reads the same state, which ensures that:
 - Map markers, route visibility, status badges, metrics, and timelines update together.
 - Invalid state transitions are ignored.
 
+Authentication validation and incident filtering are pure functions. This keeps form and table behavior consistent while allowing both to be tested without rendering the interface.
+
 These rules belong in a server-side domain layer when the backend is connected so every device receives an authoritative incident state.
 
 ## 4. Mapping and location flow
 
 The map is centred on Jalingo and displays medical, fire, and police facilities alongside response units. Once an incident is reported, the application adds the incident position and search radius. Assignment adds the selected response unit and travel route.
+
+Available response units are green, engaged or assigned units are red, and offline units are grey. The same status meaning appears in the map legend and adjacent operational information.
 
 The current route line connects the response unit to the incident coordinates. Road-aware navigation can be connected through OSRM, Valhalla, GraphHopper, Mapbox Directions, or Google Routes.
 
@@ -177,6 +187,8 @@ The application includes these accessibility foundations:
 - Status text in addition to color.
 - `prefers-reduced-motion` support.
 - A semantic label for the response-unit table.
+- Inline form errors connected to their fields with `aria-describedby`.
+- Mobile incident cards that preserve every table label without horizontal page overflow.
 
 Important map information is repeated in adjacent text panels so emergency progress does not depend on seeing a marker.
 
@@ -196,6 +208,8 @@ geo-app/
     ├── data.ts                Facilities, responders, coordinates, and copy
     ├── state.ts               Incident reducer and transition rules
     ├── state.test.ts          Workflow state test
+    ├── validation.ts          Authentication validation and incident filtering
+    ├── validation.test.ts     Validation and filtering tests
     ├── styles.css             Visual system and responsive layouts
     ├── types.ts               Domain types
     └── vite-env.d.ts          Vite browser type declarations
@@ -224,7 +238,7 @@ Vite prints the local application address, commonly `http://localhost:5173`.
 
 The following infrastructure completes the full emergency network:
 
-- Citizen, responder, dispatcher, and administrator authentication.
+- Server-backed identity verification for citizen, responder, dispatcher, and administrator accounts.
 - Verified accounts, role-based permissions, sessions, and audit logs.
 - A backend API and transactional database.
 - Device geolocation with accuracy and failure handling.
