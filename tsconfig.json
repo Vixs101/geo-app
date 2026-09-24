@@ -1,5 +1,5 @@
 {
-  "compilerOptions": { "types": ["node"], "allowImportingTsExtensions": true, "noEmit": true },
+  "compilerOptions": { "types": ["node"], "allowImportingTsExtensions": true, "rewriteRelativeImportExtensions": true, "noEmit": true },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
