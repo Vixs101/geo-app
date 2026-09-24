@@ -8,9 +8,9 @@ RapidAid is a Real-Time Emergency Response and Asset Mapping System for Taraba S
 - Responders receive requests, accept assignments, navigate to incidents, record arrival, and close completed incidents.
 - Dispatchers monitor active incidents, facilities, response units, availability, and operational performance.
 
-Account access begins with validated Login and Registration forms. Administrators can move between live operations and a searchable historical incident archive.
+Account access uses stored users and sessions. Administrators can move between demo operations and a searchable sample incident archive.
 
-The current application keeps these experiences synchronized through a shared incident workflow and a common geographic view of the Jalingo response zone.
+The current application shares incident state only within one browser tab. Incidents and responder locations are demo data, not a live emergency service.
 
 ## 2. Technology stack
 
@@ -23,7 +23,7 @@ Why it is used:
 - Fast development startup and browser updates.
 - Minimal configuration for React and TypeScript.
 - Optimized static assets that can be hosted on Vercel, Netlify, Cloudflare Pages, GitHub Pages, or a conventional web server.
-- A clean separation between the frontend and future server infrastructure.
+- Vercel Functions in `api/` provide the authentication backend.
 
 Project commands:
 
@@ -47,7 +47,7 @@ The principal React features are:
 - `useMemo` for derived accessibility announcements.
 - `useEffect` to resize Leaflet correctly when responsive layouts change.
 
-React Router is not required because the role selector operates within one authenticated application shell. This keeps transitions immediate and preserves the active incident when changing operational views.
+Routes use browser navigation and the authenticated account role: `/` for citizens, `/responder` for responders, and `/admin` for administrators.
 
 ### TypeScript
 
@@ -133,33 +133,34 @@ It detects unused values, incorrect hook behavior, and code patterns that could 
 
 ## 3. Application architecture
 
-The frontend follows a compact unidirectional data flow:
+The demo incident workflow follows a compact unidirectional data flow within each browser tab:
 
 ```text
-Login / Registration ── Authenticated application shell
-                                │
-System data ──────┐              ├── Citizen view
-                  ├── Shared incident reducer ── Responder view
-User actions ─────┤              └── Command-centre view
-                  └── Leaflet map and incident tables receive the same state
+Login / Registration ── Vercel Function ── Turso users and sessions
+                                              │
+                                      Role-gated route
+                                              │
+                            Citizen / Responder / Admin view
+                                              │
+                           Local demo incident reducer and map
 ```
 
-There is one source of truth for the active emergency. When a citizen submits a request, the reducer moves from `idle` to `locating`, then to `searching`. When a responder or dispatcher accepts the request, the state moves to `assigned`. A declined request remains in `searching` for reassignment. Responder actions move an accepted request through `en_route`, `arrived`, and `resolved`.
+There is one source of truth for the active demo emergency in each tab. When a citizen submits a request, the reducer moves from `idle` to `locating`, then to `searching`. Responder and dispatcher actions work only in the same tab and do not reach other users.
 
-Every role reads the same state, which ensures that:
+Within one tab, the demo UI reads the same reducer state, which ensures that:
 
-- Citizen and dispatcher statuses agree.
+- Visible status panels agree within that tab.
 - The assigned responder category matches the emergency category.
 - Map markers, route visibility, status badges, metrics, and timelines update together.
 - Invalid state transitions are ignored.
 
 Authentication validation and incident filtering are pure functions. This keeps form and table behavior consistent while allowing both to be tested without rendering the interface.
 
-These rules belong in a server-side domain layer when the backend is connected so every device receives an authoritative incident state.
+These rules must move server-side when real incident synchronization is added.
 
 ## 4. Mapping and location flow
 
-The map is centred on Jalingo and displays medical, fire, and police facilities alongside response units. Once an incident is reported, the application adds the incident position and search radius. Assignment adds the selected response unit and travel route.
+The map is centred on Jalingo and displays sample facilities and response units. Demo incidents use a fixed position, search radius, and illustrative route.
 
 Available response units are green, engaged or assigned units are red, and offline units are grey. The same status meaning appears in the map legend and adjacent operational information.
 
@@ -199,6 +200,11 @@ geo-app/
 ├── index.html                 Browser entry document
 ├── package.json               Dependencies and scripts
 ├── vite.config.ts             Vite React configuration
+├── vercel.json                Direct-link rewrites for role routes
+├── api/auth.ts                Vercel authentication function
+├── server/auth.ts             Turso queries, schema, password hashing
+├── server/dev.ts              Local API server for Vite proxy
+├── scripts/create-staff.ts    Staff account creation command
 ├── tsconfig*.json             Browser and tool TypeScript settings
 ├── eslint.config.js           Static-analysis rules
 ├── TECHNOLOGY_GUIDE.md        System technology documentation
@@ -229,18 +235,19 @@ From the `geo-app` directory:
 
 ```bash
 npm install
+npm run dev:api
+# in another terminal:
 npm run dev
 ```
 
-Vite prints the local application address, commonly `http://localhost:5173`.
+Vite prints the local application address, commonly `http://localhost:5173`. See `README.md` for Turso and Vercel setup.
 
 ## 8. Service integrations
 
 The following infrastructure completes the full emergency network:
 
-- Server-backed identity verification for citizen, responder, dispatcher, and administrator accounts.
-- Verified accounts, role-based permissions, sessions, and audit logs.
-- A backend API and transactional database.
+- Account identity, role-based screen access, sessions, and a hosted SQLite-compatible database are implemented.
+- Operational audit logs and authoritative server-side incident permissions remain future work.
 - Device geolocation with accuracy and failure handling.
 - PostgreSQL with PostGIS for nearest-unit searches.
 - WebSocket communication for incident and responder updates.

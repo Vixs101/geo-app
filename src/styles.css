@@ -186,41 +186,22 @@ p {
   text-transform: uppercase;
 }
 
-.role-switcher {
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #f4f7f9;
-}
-
-.role-switcher button {
-  min-height: 38px;
-  padding: 8px 13px;
+.role-label {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 0;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  color: #627085;
-  background: transparent;
-  cursor: pointer;
+  color: var(--teal-dark);
+  background: #f4f7f9;
   font-size: 13px;
   font-weight: 720;
   white-space: nowrap;
 }
 
-.role-switcher button:hover {
-  color: var(--ink);
-}
-
-.role-switcher button.active {
-  color: var(--teal-dark);
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(20, 32, 51, 0.09);
-}
+.auth-error { color: #b42332; font-size: 13px; }
+.auth-loading { min-height: 100vh; display: grid; place-content: center; gap: 12px; text-align: center; }
 
 .header-meta {
   display: flex;
@@ -233,9 +214,13 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  max-width: clamp(80px, 22vw, 240px);
+  overflow: hidden;
   color: #526173;
   font-size: 12px;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .network i,
@@ -2127,8 +2112,7 @@ p {
 
 @media (max-width: 1120px) {
   .app-header { grid-template-columns: auto 1fr auto; }
-  .network { display: none; }
-  .role-switcher { justify-self: center; }
+  .role-label { justify-self: center; }
   .citizen-grid { grid-template-columns: 1fr 0.9fr; }
   .emergency-options { grid-template-columns: 1fr; }
   .emergency-option { min-height: 76px; flex-direction: row; align-items: center; justify-content: flex-start; }
@@ -2184,18 +2168,7 @@ p {
     grid-template-columns: 1fr auto;
     gap: 10px 16px;
   }
-  .role-switcher {
-    position: static;
-    width: 100%;
-    grid-column: 1 / -1;
-    justify-self: stretch;
-    justify-content: stretch;
-    padding: 5px;
-    border-color: rgba(184, 197, 207, 0.8);
-    background: #f4f7f9;
-    box-shadow: none;
-  }
-  .role-switcher button { flex: 1; justify-content: center; }
+  .role-label { grid-column: 1 / -1; justify-self: start; }
   .citizen-page,
   .operations-page { padding-top: 32px; padding-bottom: 64px; }
   .citizen-intro { align-items: flex-start; }
@@ -2227,11 +2200,9 @@ p {
   .brand__mark { width: 38px; height: 38px; border-radius: 11px; }
   .brand strong { font-size: 16px; }
   .brand small { display: none; }
-  .header-meta { gap: 0; }
+  .header-meta { gap: 8px; }
   .avatar { width: 38px; height: 38px; }
-  .role-switcher { gap: 4px; border-radius: 13px; }
-  .role-switcher button { min-width: 0; min-height: 42px; padding-inline: 5px; font-size: 10px; }
-  .role-switcher button span { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+  .role-label { font-size: 11px; }
   .citizen-page,
   .operations-page { padding: 26px 13px 52px; }
   .citizen-intro,
@@ -2276,7 +2247,6 @@ p {
   .metric-card small { display: none; }
   .dispatcher-page .page-title-row { display: block; }
   .dispatch-actions { margin-top: 16px; }
-  .dispatch-actions .primary-action { margin-left: auto; }
   .command-map,
   .incident-queue,
   .units-panel,

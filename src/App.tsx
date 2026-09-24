@@ -57,7 +57,7 @@ import type {
 const roles: { id: Role; label: string; icon: typeof UserRound }[] = [
   { id: "citizen", label: "Citizen", icon: UserRound },
   { id: "responder", label: "Responder", icon: Ambulance },
-  { id: "dispatcher", label: "Command centre", icon: Radio },
+  { id: "admin", label: "Command centre", icon: Radio },
 ];
 
 function markerIcon(kind: "incident" | "responder" | "facility", color: string) {
@@ -173,7 +173,7 @@ function EmergencyMap({
         <span><i className="legend-dot legend-dot--engaged" /> Engaged</span>
         <span><i className="legend-dot legend-dot--facility" /> Facility</span>
       </div>
-      <div className="map-live"><Wifi size={13} /> Live</div>
+      <div className="map-live"><Wifi size={13} /> Demo</div>
     </div>
   );
 }
@@ -187,35 +187,21 @@ function Logo() {
   );
 }
 
-function AppHeader({ role, setRole, logout }: { role: Role; setRole: (role: Role) => void; logout: () => void }) {
+function AppHeader({ role, name, logout }: { role: Role; name: string; logout: () => void }) {
+  const currentRole = roles.find((item) => item.id === role)!;
+  const RoleIcon = currentRole.icon;
   return (
     <>
       <div className="system-banner">
         <span><Radio size={14} /> Taraba State Emergency Network</span>
         <p>Jalingo response zone</p>
-        <strong><i /> All systems operational</strong>
+        <strong>Demo only · no emergency dispatch</strong>
       </div>
       <header className="app-header">
         <Logo />
-        <nav className="role-switcher" aria-label="Application role">
-          {roles.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                type="button"
-                key={item.id}
-                className={role === item.id ? "active" : ""}
-                aria-pressed={role === item.id}
-                aria-label={`View as ${item.label}`}
-                onClick={() => setRole(item.id)}
-              >
-                <Icon size={17} /> <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <span className="role-label"><RoleIcon size={17} /> {currentRole.label}</span>
         <div className="header-meta">
-          <span className="network"><i /> Network operational</span>
+          <span className="network">Welcome, {name}</span>
           <button className="avatar" type="button" aria-label="Sign out" title="Sign out" onClick={logout}><LogOut size={19} /></button>
         </div>
       </header>
@@ -223,15 +209,19 @@ function AppHeader({ role, setRole, logout }: { role: Role; setRole: (role: Role
   );
 }
 
-function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
-  const [mode, setMode] = useState<AuthMode>("login");
+function AuthScreen({ onAuthenticated }: { onAuthenticated: (mode: AuthMode, values: AuthValues) => Promise<void> }) {
+  const [mode, setMode] = useState<AuthMode>(window.location.pathname === "/register" ? "register" : "login");
   const [showPassword, setShowPassword] = useState(false);
   const [values, setValues] = useState<AuthValues>({ fullName: "", phone: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState<Partial<Record<keyof AuthValues, string>>>({});
+  const [serverError, setServerError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   function changeMode(nextMode: AuthMode) {
     setMode(nextMode);
     setErrors({});
+    setServerError("");
+    window.history.replaceState(null, "", nextMode === "login" ? "/login" : "/register");
   }
 
   function update(field: keyof AuthValues, value: string) {
@@ -239,11 +229,16 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors = validateAuth(mode, values);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length === 0) onAuthenticated();
+    if (Object.keys(nextErrors).length) return;
+    setServerError("");
+    setSubmitting(true);
+    try { await onAuthenticated(mode, values); }
+    catch (error) { setServerError(error instanceof Error ? error.message : "Unable to sign in"); }
+    finally { setSubmitting(false); }
   }
 
   const field = (name: keyof AuthValues, label: string, type = "text", placeholder = "") => (
@@ -272,11 +267,11 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
         <div>
           <span className="eyebrow"><ShieldCheck size={15} /> Taraba emergency network</span>
           <h1>Help reaches the right place, faster.</h1>
-          <p>One secure network for citizens, emergency responders and dispatch operations across Taraba State.</p>
+          <p>Explore a sample emergency response flow for citizens, responders and dispatchers across Taraba State.</p>
         </div>
         <div className="auth-benefits">
-          <span><LocateFixed size={19} /><strong>Precise location</strong><small>Share verified GPS coordinates instantly.</small></span>
-          <span><Radio size={19} /><strong>Rapid dispatch</strong><small>Reach the closest available response unit.</small></span>
+          <span><LocateFixed size={19} /><strong>Sample location</strong><small>Explore a mapped incident in Jalingo.</small></span>
+          <span><Radio size={19} /><strong>Response flow</strong><small>See how a sample request progresses.</small></span>
           <span><ShieldCheck size={19} /><strong>Trusted network</strong><small>Protected access for every account.</small></span>
         </div>
         <p className="auth-support"><Phone size={15} /> Emergency voice line <strong>112</strong></p>
@@ -298,8 +293,8 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
             {field("phone", "Phone number", "tel", "e.g. 0803 123 4567")}
             {field("password", "Password", "password", "Minimum 6 characters")}
             {mode === "register" && field("confirmPassword", "Confirm password", "password", "Repeat your password")}
-            {mode === "login" && <div className="auth-options"><label><input type="checkbox" /> Remember me</label><button type="button">Forgot password?</button></div>}
-            <button type="submit" className="primary-action auth-submit">{mode === "login" ? <LogIn size={18} /> : <UserPlus size={18} />}{mode === "login" ? "Login securely" : "Create account"}<ChevronRight size={18} /></button>
+            {serverError && <p className="auth-error" role="alert">{serverError}</p>}
+            <button type="submit" className="primary-action auth-submit" disabled={submitting}>{mode === "login" ? <LogIn size={18} /> : <UserPlus size={18} />}{submitting ? "Please wait…" : mode === "login" ? "Login securely" : "Create account"}<ChevronRight size={18} /></button>
           </form>
           <p className="auth-switch">{mode === "login" ? "New to RapidAid?" : "Already registered?"} <button type="button" onClick={() => changeMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Create an account" : "Login instead"}</button></p>
         </div>
@@ -374,7 +369,7 @@ function CitizenView({
               <button type="button">Edit</button>
             </div>
             <button className="primary-action primary-action--danger" type="button" onClick={begin}>
-              <Siren size={20} /> Request emergency help <ChevronRight size={19} />
+              <Siren size={20} /> Try emergency demo <ChevronRight size={19} />
             </button>
             <p className="privacy-note"><ShieldCheck size={14} /> Your location is only shared with the assigned response team.</p>
           </div>
@@ -408,7 +403,7 @@ function CitizenView({
               {[
                 ["searching", "Request shared", "Your location and emergency type were received."],
                 ["assigned", "Responder assigned", `${primary.unit} accepted your request.`],
-                ["en_route", "Travelling to you", "Live location sharing is active."],
+                ["en_route", "Travelling to you", "Demo responder movement is shown on the map."],
                 ["arrived", "Help arrived", "The response team reached your location."],
               ].map(([step, label, description]) => {
                 const done = hasReached(status, step as IncidentStatus);
@@ -436,12 +431,14 @@ function CitizenView({
 }
 
 function ResponderView({
+  name,
   emergency,
   status,
   declined,
   transition,
   decline,
 }: {
+  name: string;
   emergency: EmergencyType;
   status: IncidentStatus;
   declined: boolean;
@@ -465,7 +462,7 @@ function ResponderView({
   return (
     <main className="operations-page">
       <div className="page-title-row">
-        <div><span className="eyebrow"><Radio size={15} /> Responder application</span><h1>Good afternoon, {primary.name.split(" ")[0]}</h1><p>{primary.unit} · Jalingo response zone</p></div>
+        <div><span className="eyebrow"><Radio size={15} /> Responder application · demo incidents</span><h1>Welcome, {name.split(" ")[0]}</h1><p>Jalingo response zone</p></div>
         <button type="button" className={`availability ${available ? "on" : ""}`} onClick={() => setAvailable((value) => !value)} aria-pressed={available}>
           <i /><span><small>Duty status</small><strong>{available ? "Available" : "Off duty"}</strong></span>
         </button>
@@ -617,8 +614,8 @@ function DispatcherView({ emergency, status, declined, transition }: { emergency
   return (
     <main className="operations-page dispatcher-page">
       <div className="page-title-row">
-        <div><span className="eyebrow"><Activity size={15} /> {adminView === "overview" ? "Live operations" : "Operations archive"}</span><h1>{adminView === "overview" ? "Emergency command centre" : "Incident logs"}</h1><p>Jalingo response zone · Monday, 31 August</p></div>
-        {adminView === "overview" && <div className="dispatch-actions"><button type="button" className="icon-button" aria-label="Search"><Search size={19} /></button><button type="button" className="icon-button notification" aria-label="Notifications"><BellRing size={19} /><i /></button><button type="button" className="primary-action"><Siren size={18} /> Create incident</button></div>}
+        <div><span className="eyebrow"><Activity size={15} /> {adminView === "overview" ? "Sample operations" : "Sample archive"}</span><h1>{adminView === "overview" ? "Emergency command centre" : "Incident logs"}</h1><p>Jalingo response zone · Demo data</p></div>
+        {adminView === "overview" && <div className="dispatch-actions"><button type="button" className="icon-button" aria-label="Search"><Search size={19} /></button><button type="button" className="icon-button notification" aria-label="Notifications"><BellRing size={19} /><i /></button></div>}
       </div>
 
       <nav className="admin-nav" aria-label="Command centre sections">
@@ -636,7 +633,7 @@ function DispatcherView({ emergency, status, declined, transition }: { emergency
 
         <section className="command-grid">
           <div className="command-map panel">
-            <div className="panel-toolbar"><div><h2>Live response map</h2><p>{responders.filter((unit) => unit.status !== "offline").length} units reporting location</p></div><div className="map-filters">{(["all", "medical", "fire", "security"] as const).map((item) => <button type="button" key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item === "all" ? "All assets" : emergencyCopy[item].short}</button>)}</div></div>
+            <div className="panel-toolbar"><div><h2>Sample response map</h2><p>{responders.filter((unit) => unit.status !== "offline").length} sample units shown</p></div><div className="map-filters">{(["all", "medical", "fire", "security"] as const).map((item) => <button type="button" key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item === "all" ? "All assets" : emergencyCopy[item].short}</button>)}</div></div>
             <EmergencyMap status={status} emergency={emergency} dependency={`dispatcher-${filter}`} assetFilter={filter} />
           </div>
 
@@ -658,10 +655,33 @@ function DispatcherView({ emergency, status, declined, transition }: { emergency
 }
 
 export function App() {
-  const [authenticated, setAuthenticated] = useState(false);
-  const [role, setRole] = useState<Role>("citizen");
+  const [user, setUser] = useState<{ id: string; name: string; phone: string; role: Role } | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
   const [incident, dispatch] = useReducer(incidentReducer, initialIncident);
   const announcement = useMemo(() => statusCopy[incident.status].title, [incident.status]);
+
+  useEffect(() => {
+    fetch("/api/auth", { credentials: "same-origin" }).then(async (response) => {
+      if (response.status === 401) return null;
+      if (!response.ok) throw new Error("Authentication is unavailable. Please retry.");
+      return (await response.json()).user as { id: string; name: string; phone: string; role: Role };
+    }).then(setUser).catch((error) => setAuthError(error.message)).finally(() => setAuthLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (authLoading || authError) return;
+    const path = window.location.pathname;
+    const target = user ? (user.role === "citizen" ? "/" : `/${user.role === "admin" ? "admin" : "responder"}`) : "/login";
+    if (path !== target && (user || (path !== "/login" && path !== "/register"))) window.location.replace(target);
+  }, [authLoading, authError, user]);
+
+  async function authenticate(mode: AuthMode, values: AuthValues) {
+    const response = await fetch("/api/auth", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: mode, values }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || Object.values(result.errors ?? {}).join(" ") || "Unable to sign in");
+    window.location.assign(result.user.role === "citizen" ? "/" : `/${result.user.role === "admin" ? "admin" : "responder"}`);
+  }
 
   function beginIncident() {
     dispatch({ type: "transition", status: "locating" });
@@ -670,21 +690,25 @@ export function App() {
 
   function reset() {
     dispatch({ type: "reset" });
-    setRole("citizen");
   }
 
-  function logout() {
-    reset();
-    setAuthenticated(false);
+  async function logout() {
+    const response = await fetch("/api/auth", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "logout" }) });
+    if (response.ok) window.location.assign("/login");
+    else setAuthError("Could not sign out. Please retry.");
   }
 
-  if (!authenticated) return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
+  if (authLoading) return <main className="auth-loading">Loading account…</main>;
+  if (authError) return <main className="auth-loading" role="alert">{authError} <button type="button" onClick={() => window.location.reload()}>Retry</button></main>;
+  if (!user) return window.location.pathname === "/login" || window.location.pathname === "/register" ? <AuthScreen onAuthenticated={authenticate} /> : null;
+  const target = user.role === "citizen" ? "/" : `/${user.role === "admin" ? "admin" : "responder"}`;
+  if (window.location.pathname !== target) return null;
 
   return (
     <div className="app">
-      <AppHeader role={role} setRole={setRole} logout={logout} />
+      <AppHeader role={user.role} name={user.name} logout={logout} />
       <div className="sr-only" aria-live="polite">{announcement}</div>
-      {role === "citizen" && (
+      {user.role === "citizen" && (
         <CitizenView
           emergency={incident.type}
           status={incident.status}
@@ -693,10 +717,10 @@ export function App() {
           reset={reset}
         />
       )}
-      {role === "responder" && (
-        <ResponderView emergency={incident.type} status={incident.status} declined={incident.declined} transition={(status) => dispatch({ type: "transition", status })} decline={() => dispatch({ type: "decline" })} />
+      {user.role === "responder" && (
+        <ResponderView name={user.name} emergency={incident.type} status={incident.status} declined={incident.declined} transition={(status) => dispatch({ type: "transition", status })} decline={() => dispatch({ type: "decline" })} />
       )}
-      {role === "dispatcher" && (
+      {user.role === "admin" && (
         <DispatcherView emergency={incident.type} status={incident.status} declined={incident.declined} transition={(status) => dispatch({ type: "transition", status })} />
       )}
       <footer className="app-footer"><Logo /><p>Connecting citizens, responders and emergency operations across Taraba State.</p><span>© 2026 RapidAid</span></footer>

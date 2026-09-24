@@ -1,4 +1,4 @@
-export type Role = "citizen" | "responder" | "dispatcher";
+export type Role = "citizen" | "responder" | "admin";
 export type AuthMode = "login" | "register";
 export type AdminView = "overview" | "logs";
 export type EmergencyType = "medical" | "fire" | "security";

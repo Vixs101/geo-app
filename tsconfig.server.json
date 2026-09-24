@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["api", "server", "scripts", "src/validation.ts", "src/types.ts"],
+  "exclude": ["**/*.test.ts"]
+}

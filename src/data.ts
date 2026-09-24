@@ -187,12 +187,12 @@ export const statusCopy: Record<
     description: "Choose the kind of help you need to begin.",
   },
   locating: {
-    title: "Locating you",
-    description: "Securely confirming your precise GPS coordinates.",
+    title: "Using sample location",
+    description: "This demo uses a fixed location in Jalingo.",
   },
   searching: {
-    title: "Contacting nearby units",
-    description: "The closest available responder has been notified.",
+    title: "Showing sample responders",
+    description: "No real responder has been notified.",
   },
   assigned: {
     title: "Help has been assigned",
